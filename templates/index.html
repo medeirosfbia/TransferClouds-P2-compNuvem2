@@ -397,6 +397,8 @@
   $('#modal-cancelar').addEventListener('click', fecharModal);
   $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') fecharModal(); });
   $('#modal-ok').addEventListener('click', () => { const f = aoConfirmar; fecharModal(); f && f(); });
+  $('#bt-transferir').addEventListener('click', () => { if (sel.size) confirmarParaAzure(selecionados()); });
+  $('#seta').addEventListener('click', () => { if (sel.size) confirmarParaAzure(selecionados()); });
 
   function confirmarParaAzure(itens) {
     const total = itens.reduce((s, a) => s + Number(a.size || 0), 0);

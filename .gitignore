@@ -3,3 +3,4 @@ credentials.json
 *.json
 .venv/
 __pycache__/
+.env.bak
