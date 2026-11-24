@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+
+{% block estilo %}
+<style>
+  :root {
+    --janela: #e9e9e9; --painel: #ffffff; --zebra: #f6f8fb; --borda: #a9a9a9; --borda-clara: #d4d4d4;
+    --texto: #1b1b1b; --apagado: #6b6b6b; --sel: #3875d7; --sel-texto: #ffffff; --sel-inativa: #cfdcf2;
+    --cab: linear-gradient(#fbfbfb, #e3e3e3); --ok: #1a7f37; --erro: #c62828; --andamento: #b26a00;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--janela); color: var(--texto);
+         font: 12px/1.35 "Segoe UI", Tahoma, "DejaVu Sans", Verdana, sans-serif; }
+  .app { display: flex; flex-direction: column; height: 100vh; min-height: 560px; }
+  button { font: inherit; }
+
+  /* Barra de título e barra de ferramentas */
+  .titulo { background: linear-gradient(#4a6fa5, #33558a); color: #fff; padding: 5px 10px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px; }
+  .titulo small { font-weight: 400; opacity: .8; margin-left: auto; }
+  .ferramentas { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--borda);
+                 background: linear-gradient(#f7f7f7, #e4e4e4); flex-wrap: wrap; }
+  .bt { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid transparent;
+        border-radius: 3px; background: transparent; cursor: pointer; color: var(--texto); text-decoration: none; }
+  .bt:hover:not(:disabled) { border-color: #9fb4d6; background: linear-gradient(#fdfdff, #dfe9f8); }
+  .bt:active:not(:disabled) { background: #cddcf3; }
+  .bt:disabled { opacity: .45; cursor: default; }
+  .bt .ic { font-size: 14px; line-height: 1; }
+  .sep { width: 1px; height: 20px; background: var(--borda-clara); margin: 0 4px; }
+  .conexao { margin-left: auto; display: flex; gap: 12px; color: var(--apagado); flex-wrap: wrap; }
+  .conexao b { color: var(--texto); font-weight: 600; }
+  .led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2fb344;
+         box-shadow: 0 0 0 1px #1d7a2c inset; margin-right: 4px; vertical-align: middle; }
+  .led.off { background: #c9c9c9; box-shadow: 0 0 0 1px #8d8d8d inset; }
+  .alerta { background: #fff4f4; color: var(--erro); border-bottom: 1px solid #e3b1b1; padding: 5px 10px; word-break: break-word; }
+
+  /* Painéis */
+  .paineis { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); gap: 0; padding: 6px; min-height: 0; }
+  .painel { display: flex; flex-direction: column; min-height: 0; background: var(--painel); border: 1px solid var(--borda); }
+  .painel-cab { display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: var(--cab); border-bottom: 1px solid var(--borda); }
+  .painel-cab .nome { font-weight: 700; }
+  .painel-cab .nome .ic { margin-right: 3px; }
+  .painel-cab .bt { margin-left: auto; padding: 2px 8px; }
+  .endereco { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--borda-clara); background: #fafafa; }
+  .endereco label { color: var(--apagado); }
+  .endereco .campo { flex: 1; min-width: 0; border: 1px solid var(--borda); background: #fff; padding: 2px 6px;
+                     font-family: Consolas, "DejaVu Sans Mono", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lista { flex: 1; overflow: auto; position: relative; outline: none; }
+  .lista:focus-within tr.sel td, .lista:focus tr.sel td { background: var(--sel); color: var(--sel-texto); }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--cab); text-align: left; font-weight: 400; padding: 3px 6px;
+       border-right: 1px solid var(--borda-clara); border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  td { padding: 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid transparent; user-select: none; }
+  tbody tr:nth-child(even) td { background: var(--zebra); }
+  tr.sel td, tbody tr.sel:nth-child(even) td { background: var(--sel-inativa); }
+  .col-tam { width: 80px; text-align: right; } .col-tipo { width: 70px; } .col-data { width: 120px; }
+  td.col-tam { font-variant-numeric: tabular-nums; }
+  tr.arquivo { cursor: grab; } tr.pasta, tr.subir { cursor: pointer; }
+  tr.novo td { animation: novo 2s ease; }
+  @keyframes novo { from { background: #fff3b0; } }
+  .ico { display: inline-block; width: 16px; text-align: center; margin-right: 5px; }
+  .existe { color: var(--ok); font-size: 11px; margin-left: 4px; }
+  .vazio-lista { color: var(--apagado); padding: 14px; text-align: center; }
+  .rodape-painel { padding: 3px 6px; border-top: 1px solid var(--borda-clara); background: #f3f3f3; color: var(--apagado);
+                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Alvos de soltar */
+  .painel.alvo .lista { outline: 2px dashed var(--sel); outline-offset: -4px; background: #eef4ff; }
+  .soltar-dica { display: none; position: absolute; inset: 0; place-items: center; pointer-events: none;
+                 color: var(--sel); font-size: 14px; font-weight: 600; text-align: center; padding: 10px; }
+  .painel.alvo .soltar-dica { display: grid; }
+
+  /* Coluna central com setas */
+  .meio { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; }
+  .seta { width: 34px; height: 34px; border: 1px solid var(--borda); border-radius: 3px; background: linear-gradient(#fff, #e2e2e2);
+          cursor: pointer; font-size: 16px; color: #2d5aa6; }
+  .seta:hover:not(:disabled) { background: linear-gradient(#fdfdff, #d5e3f8); border-color: #7c9bd0; }
+  .seta:disabled { opacity: .4; cursor: default; }
+
+  /* Fila de transferência */
+  .fila { height: 190px; margin: 0 6px 6px; display: flex; flex-direction: column; background: var(--painel); border: 1px solid var(--borda); }
+  .abas { display: flex; background: var(--cab); border-bottom: 1px solid var(--borda); align-items: stretch; }
+  .aba { padding: 4px 12px; border-right: 1px solid var(--borda-clara); background: #fff; font-weight: 600; }
+  .abas .bt { margin-left: auto; }
+  .fila .lista td { user-select: text; }
+  .st { font-weight: 600; }
+  .st.fila-espera { color: var(--apagado); font-weight: 400; } .st.andamento { color: var(--andamento); }
+  .st.sucesso { color: var(--ok); } .st.erro { color: var(--erro); }
+  .dir { font-family: Consolas, "DejaVu Sans Mono", monospace; color: var(--apagado); }
+  .barra { height: 10px; border: 1px solid #9a9a9a; background: #fff; position: relative; overflow: hidden; }
+  .barra i { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(#7fd17f, #3a9d3a); transition: width .2s; }
+  .barra.ind i { width: 35%; animation: ind 1s linear infinite; background: linear-gradient(#f5c870, #d99a1e); }
+  @keyframes ind { from { left: -35%; } to { left: 100%; } }
+  .barra.err i { width: 100%; background: linear-gradient(#ef8a8a, #c62828); }
+
+  .status { display: flex; gap: 16px; padding: 3px 10px; border-top: 1px solid var(--borda); background: #e2e2e2; color: #333; flex-wrap: wrap; }
+
+  /* Modal */
+  .fundo { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; place-items: center; z-index: 100; padding: 16px; }
+  .fundo.on { display: grid; }
+  .dialogo { width: min(520px, 100%); background: var(--janela); border: 1px solid #5a5a5a; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  .dialogo .titulo { padding: 6px 10px; }
+  .dialogo .corpo { padding: 14px; display: flex; gap: 12px; }
+  .dialogo .grande { font-size: 30px; line-height: 1; }
+  .dialogo ul { margin: 8px 0; padding: 4px 6px; max-height: 180px; overflow: auto; list-style: none; background: #fff;
+                border: 1px solid var(--borda); font-family: Consolas, "DejaVu Sans Mono", monospace; font-size: 11.5px; }
+  .dialogo li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 1px 0; }
+  .dialogo .aviso { color: var(--andamento); }
+  .dialogo .acoes { display: flex; justify-content: flex-end; gap: 6px; padding: 8px 14px 12px; }
+  .bt-dlg { min-width: 86px; padding: 4px 12px; border: 1px solid #8a8a8a; border-radius: 3px; background: linear-gradient(#fff, #e1e1e1); cursor: pointer; }
+  .bt-dlg.padrao { border-color: #3a6fc4; box-shadow: 0 0 0 1px #9ebcf0 inset; }
+  .bt-dlg:hover { background: linear-gradient(#fdfdff, #d5e3f8); }
+
+  @media (max-width: 760px) {
+    .app { height: auto; }
+    .paineis { grid-template-columns: 1fr; grid-template-rows: 340px auto 340px; }
+    .meio { flex-direction: row; padding: 6px 0; }
+    .seta { transform: rotate(90deg); }
+    .col-tipo, .col-data { display: none; }
+    .conexao { margin-left: 0; width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block conteudo %}
+{% set na_pasta = pasta and pasta.id != 'shared' %}
+<div class="app">
+  <div class="titulo"><span>⇄ Drive ⇄ Blob</span><small>Transferência de arquivos — Google Drive → Azure Blob Storage</small></div>
+
+  <div class="ferramentas">
+    <a class="bt" href="{{ url_for('index', pasta=pasta.id if pasta else 'shared') }}" title="Atualizar (F5)"><span class="ic">⟳</span>Atualizar</a>
+    {% if voltar %}<a class="bt" href="{{ url_for('index', pasta=voltar) }}" title="Pasta acima (Backspace)"><span class="ic">⬑</span>Acima</a>{% endif %}
+    <a class="bt" href="{{ url_for('index') }}" title="Raiz"><span class="ic">⌂</span>Raiz</a>
+    <span class="sep"></span>
+    {% if upload_feature %}
+    <button class="bt" id="bt-upload" {% if not (na_pasta and upload_ok) %}disabled{% endif %}
+            title="{% if not upload_ok %}Upload não configurado (token.json ausente){% elif not na_pasta %}Abra uma pasta para enviar arquivos{% else %}Enviar arquivos do computador para esta pasta do Drive{% endif %}">
+      <span class="ic">⇧</span>Enviar ao Drive…</button>
+    <input type="file" id="input-upload" multiple hidden>
+    <span class="sep"></span>
+    {% endif %}
+    <button class="bt" id="bt-todos" title="Selecionar todos os arquivos (Ctrl+A)"><span class="ic">☑</span>Selecionar tudo</button>
+    <button class="bt" id="bt-transferir" disabled title="Transferir selecionados para o Azure"><span class="ic">⇨</span>Transferir selecionados</button>
+    <div class="conexao">
+      {% if conta %}<span title="Leitura: {{ conta }}"><span class="led"></span>Google: <b>{{ conta.split('@')[0] }}</b></span>{% endif %}
+      {% if upload_feature %}<span title="{{ 'Upload para o Drive habilitado' if upload_ok else 'Upload para o Drive não configurado' }}"><span class="led {{ '' if upload_ok else 'off' }}"></span>Upload</span>{% endif %}
+      <span><span class="led"></span>Azure: <b>{{ container }}</b></span>
+    </div>
+  </div>
+
+  {% if erro %}<div class="alerta">⚠ {{ erro }}</div>{% endif %}
+
+  <div class="paineis">
+    <!-- ORIGEM: Google Drive -->
+    <section class="painel" id="painel-origem">
+      <div class="painel-cab"><span class="nome"><span class="ic">🗂</span>Origem — Google Drive</span></div>
+      <div class="endereco"><label>Caminho:</label>
+        <div class="campo" title="{{ pasta.name if pasta else '' }}">drive:/{% if na_pasta %}…/{{ pasta.name }}{% endif %}</div>
+      </div>
+      <div class="lista" id="lista-origem" tabindex="0">
+        <table>
+          <thead><tr><th>Nome</th><th class="col-tam">Tamanho</th><th class="col-tipo">Tipo</th><th class="col-data">Modificado</th></tr></thead>
+          <tbody id="corpo-origem"></tbody>
+        </table>
+        <div class="vazio-lista" id="origem-vazio" hidden>
+          {% if not na_pasta %}Nenhuma pasta foi compartilhada com a Service Account.{% else %}Pasta vazia.{% if upload_ok %} Arraste arquivos do computador para cá.{% endif %}{% endif %}
+        </div>
+        {% if upload_feature %}<div class="soltar-dica">Solte para enviar ao Google Drive<br>drive:/…/{{ pasta.name if na_pasta else '' }}</div>{% endif %}
+      </div>
+      <div class="rodape-painel" id="rodape-origem"></div>
+    </section>
+
+    <div class="meio">
+      <button class="seta" id="seta" disabled title="Transferir selecionados para o Azure">➜</button>
+    </div>
+
+    <!-- DESTINO: Azure Blob -->
+    <section class="painel" id="painel-destino">
+      <div class="painel-cab"><span class="nome"><span class="ic">☁</span>Destino — Azure Blob Storage</span></div>
+      <div class="endereco"><label>Caminho:</label><div class="campo">azure://{{ container }}/</div></div>
+      <div class="lista" id="lista-destino" tabindex="0">
+        <table>
+          <thead><tr><th>Nome</th><th class="col-tam">Tamanho</th><th class="col-tipo">Tipo</th><th class="col-data">Modificado</th></tr></thead>
+          <tbody id="corpo-destino"></tbody>
+        </table>
+        <div class="vazio-lista" id="destino-vazio" hidden>Contêiner vazio. Arraste arquivos do Drive para cá.</div>
+        <div class="soltar-dica">Solte para transferir para azure://{{ container }}/</div>
+      </div>
+      <div class="rodape-painel" id="rodape-destino"></div>
+    </section>
+  </div>
+
+  <!-- Fila de transferência -->
+  <section class="fila">
+    <div class="abas"><span class="aba">Fila de transferência</span>
+      <button class="bt" id="bt-limpar-fila" title="Limpar itens concluídos">Limpar concluídos</button></div>
+    <div class="lista">
+      <table>
+        <thead><tr><th>Arquivo</th><th style="width:70px">Direção</th><th style="width:26%">Destino</th><th class="col-tam">Tamanho</th><th style="width:110px">Progresso</th><th style="width:24%">Status</th></tr></thead>
+        <tbody id="corpo-fila"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="status"><span id="status-geral">Pronto.</span><span id="status-fila"></span></div>
+</div>
+
+<!-- Modal de confirmação -->
+<div class="fundo" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+  <div class="dialogo">
+    <div class="titulo" id="modal-titulo">Confirmar transferência</div>
+    <div class="corpo">
+      <div class="grande" id="modal-icone">⇨</div>
+      <div style="min-width:0;flex:1">
+        <div id="modal-resumo"></div>
+        <ul id="modal-lista"></ul>
+        <div class="aviso" id="modal-aviso"></div>
+        <div>Destino: <b id="modal-destino"></b></div>
+      </div>
+    </div>
+    <div class="acoes">
+      <button class="bt-dlg padrao" id="modal-ok">Transferir</button>
+      <button class="bt-dlg" id="modal-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(() => {
+  const URL = {
+    index: "{{ url_for('index') }}", transferir: "{{ url_for('api_transferir') }}",
+    destino: "{{ url_for('api_destino') }}", origem: "{{ url_for('api_origem') }}", upload: "{{ url_for('api_upload_drive') }}",
+  };
+  const PASTA = {{ (pasta.id if na_pasta else '')|tojson }};
+  const PASTA_NOME = {{ (pasta.name if na_pasta else '')|tojson }};
+  const CONTAINER = {{ container|tojson }};
+  const UPLOAD_OK = {{ (upload_ok and na_pasta)|tojson }};
+  const VOLTAR = {{ voltar|tojson }};
+  const SUBPASTAS = {{ subpastas|tojson }};
+  let origem = {{ origem|tojson }};
+  let destino = {{ destino|tojson }};
+  const PARALELO = 3;
+
+  const $ = s => document.querySelector(s);
+  const corpoOrigem = $('#corpo-origem');
+  const sel = new Set();       // IDs selecionados
+  let ancora = null;           // índice para Shift+clique
+  let novos = new Set();       // nomes recém-enviados ao Drive (destaque)
+
+  // ---------- utilidades
+  const fmt = n => { n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    for (const u of ['KB', 'MB', 'GB']) { n /= 1024; if (n < 1024 || u === 'GB') return n.toFixed(1) + ' ' + u; } };
+  const tipo = nome => nome.includes('.') ? nome.split('.').pop().toUpperCase().slice(0, 4) : 'ARQ';
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const data = s => (s || '').slice(0, 16).replace('T', ' ');
+  const nomesDestino = () => new Set(destino.map(b => b.name));
+  const pastaHref = id => `${URL.index}?pasta=${encodeURIComponent(id)}`;
+  const selecionados = () => origem.filter(a => sel.has(a.id));
+
+  // ---------- painel do Drive
+  function desenharOrigem() {
+    const noAzure = nomesDestino();
+    let html = '';
+    if (VOLTAR) html += `<tr class="subir" data-href="${pastaHref(VOLTAR)}"><td><span class="ico">📁</span>..</td><td class="col-tam"></td><td class="col-tipo"></td><td class="col-data"></td></tr>`;
+    for (const p of SUBPASTAS)
+      html += `<tr class="pasta" data-href="${pastaHref(p.id)}" title="Duplo clique para abrir"><td><span class="ico">📁</span>${esc(p.name)}</td>
+               <td class="col-tam"></td><td class="col-tipo">Pasta</td><td class="col-data"></td></tr>`;
+    origem.forEach((a, i) => {
+      const existe = noAzure.has(a.name);
+      html += `<tr class="arquivo${sel.has(a.id) ? ' sel' : ''}${novos.has(a.name) ? ' novo' : ''}" draggable="true" data-i="${i}">
+        <td title="${esc(a.name)}"><span class="ico">📄</span>${esc(a.name)}${existe ? '<span class="existe" title="Já existe no Azure">✔</span>' : ''}</td>
+        <td class="col-tam">${a.size ? fmt(a.size) : '—'}</td><td class="col-tipo">${esc(a.tipo || tipo(a.name))}</td>
+        <td class="col-data">${data(a.modifiedTime)}</td></tr>`;
+    });
+    corpoOrigem.innerHTML = html;
+    $('#origem-vazio').hidden = !!(VOLTAR || SUBPASTAS.length || origem.length);
+    novos = new Set();
+    atualizarSelecao();
+  }
+  function atualizarSelecao() {
+    corpoOrigem.querySelectorAll('tr.arquivo').forEach(tr => tr.classList.toggle('sel', sel.has(origem[tr.dataset.i].id)));
+    const s = selecionados();
+    const total = s.reduce((t, a) => t + Number(a.size || 0), 0);
+    $('#bt-transferir').disabled = $('#seta').disabled = s.length === 0;
+    $('#bt-todos').disabled = origem.length === 0;
+    $('#rodape-origem').textContent = s.length
+      ? `${s.length} de ${origem.length} arquivo(s) selecionado(s). Tamanho total: ${fmt(total)}`
+      : `${origem.length} arquivo(s), ${SUBPASTAS.length} pasta(s)`;
+  }
+  async function recarregarOrigem() {
+    if (!PASTA) return;
+    try {
+      const r = await fetch(`${URL.origem}?pasta=${encodeURIComponent(PASTA)}`);
+      if (r.ok) { origem = await r.json(); const ids = new Set(origem.map(a => a.id)); [...sel].forEach(id => ids.has(id) || sel.delete(id)); desenharOrigem(); }
+    } catch (_) {}
+  }
+
+  // ---------- seleção estilo explorador (clique, Ctrl+clique, Shift+clique, Ctrl+A)
+  const linhaDe = e => e.target.closest('tr');
+  corpoOrigem.addEventListener('mousedown', e => {
+    const tr = linhaDe(e);
+    if (e.button !== 0 || !tr || !tr.classList.contains('arquivo')) return;
+    const i = Number(tr.dataset.i), id = origem[i].id;
+    if (e.shiftKey && ancora !== null) {
+      if (!e.ctrlKey && !e.metaKey) sel.clear();
+      for (let k = Math.min(ancora, i); k <= Math.max(ancora, i); k++) sel.add(origem[k].id);
+    } else if (e.ctrlKey || e.metaKey) {
+      sel.has(id) ? sel.delete(id) : sel.add(id); ancora = i;
+    } else if (!sel.has(id)) {          // clicar num já selecionado mantém o grupo (para poder arrastar)
+      sel.clear(); sel.add(id); ancora = i;
+    }
+    atualizarSelecao();
+  });
+  corpoOrigem.addEventListener('click', e => {   // clique simples sem arrastar: fica só ele
+    const tr = linhaDe(e);
+    if (!tr || !tr.classList.contains('arquivo') || e.shiftKey || e.ctrlKey || e.metaKey) return;
+    sel.clear(); sel.add(origem[tr.dataset.i].id); ancora = Number(tr.dataset.i); atualizarSelecao();
+  });
+  corpoOrigem.addEventListener('dblclick', e => {
+    const tr = linhaDe(e); if (!tr) return;
+    if (tr.dataset.href) location.href = tr.dataset.href;
+    else if (tr.classList.contains('arquivo')) confirmarParaAzure([origem[tr.dataset.i]]);
+  });
+  $('#lista-origem').addEventListener('mousedown', e => {
+    if (!e.target.closest('tr.arquivo') && !e.target.closest('thead') && !e.ctrlKey && !e.shiftKey) { sel.clear(); atualizarSelecao(); }
+  });
+  $('#bt-todos').addEventListener('click', () => { origem.forEach(a => sel.add(a.id)); atualizarSelecao(); $('#lista-origem').focus(); });
+  document.addEventListener('keydown', e => {
+    if ($('#modal').classList.contains('on')) {
+      if (e.key === 'Escape') fecharModal();
+      if (e.key === 'Enter') { e.preventDefault(); $('#modal-ok').click(); }
+      return;
+    }
+    const focoOrigem = document.activeElement === $('#lista-origem');
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && focoOrigem) {
+      e.preventDefault(); origem.forEach(a => sel.add(a.id)); atualizarSelecao();
+    }
+    if (e.key === 'Backspace' && VOLTAR && !e.target.matches('input, textarea')) location.href = pastaHref(VOLTAR);
+    if (e.key === 'Enter' && focoOrigem && sel.size) confirmarParaAzure(selecionados());
+  });
+
+  // ---------- arrastar: Drive -> Azure (interno) e Computador -> Drive (arquivos do sistema)
+  const temArquivosDoPC = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  corpoOrigem.addEventListener('dragstart', e => {
+    const tr = linhaDe(e);
+    if (!tr || !tr.classList.contains('arquivo')) { e.preventDefault(); return; }
+    const a = origem[tr.dataset.i];
+    if (!sel.has(a.id)) { sel.clear(); sel.add(a.id); atualizarSelecao(); }
+    const s = selecionados();
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('application/x-drive-ids', s.map(x => x.id).join(','));
+    e.dataTransfer.setData('text/plain', s.map(x => x.name).join('\n'));
+    const fantasma = document.createElement('div');
+    fantasma.textContent = s.length > 1 ? `📄 ${s.length} arquivos` : `📄 ${s[0].name}`;
+    Object.assign(fantasma.style, { position: 'absolute', top: '-1000px', padding: '3px 8px', background: '#3875d7',
+                                    color: '#fff', font: '12px sans-serif', borderRadius: '3px' });
+    document.body.appendChild(fantasma); e.dataTransfer.setDragImage(fantasma, 10, 10);
+    setTimeout(() => fantasma.remove());
+  });
+
+  function alvo(painel, aceita, aoSoltar) {
+    let cont = 0;   // dragenter/dragleave disparam nos filhos: contamos para não piscar
+    painel.addEventListener('dragenter', e => { if (!aceita(e)) return; e.preventDefault(); cont++; painel.classList.add('alvo'); });
+    painel.addEventListener('dragleave', e => { if (!aceita(e)) return; if (--cont <= 0) { cont = 0; painel.classList.remove('alvo'); } });
+    painel.addEventListener('dragover', e => { if (!aceita(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+    painel.addEventListener('drop', e => { if (!aceita(e)) return; e.preventDefault(); cont = 0; painel.classList.remove('alvo'); aoSoltar(e); });
+  }
+  // Drive -> Azure
+  alvo($('#painel-destino'), e => [...e.dataTransfer.types].includes('application/x-drive-ids'), e => {
+    const ids = e.dataTransfer.getData('application/x-drive-ids').split(',');
+    const itens = origem.filter(a => ids.includes(a.id));
+    if (itens.length) confirmarParaAzure(itens);
+  });
+  // Computador -> Drive
+  alvo($('#painel-origem'), e => UPLOAD_OK && temArquivosDoPC(e), e => confirmarParaDrive([...e.dataTransfer.files]));
+  // evita que o navegador abra o arquivo se ele for solto fora de um painel
+  ['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => { if (temArquivosDoPC(e)) e.preventDefault(); }));
+
+  $('#bt-upload')?.addEventListener('click', () => $('#input-upload').click());
+  $('#input-upload')?.addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) confirmarParaDrive(f); });
+
+  // ---------- modal de confirmação (genérico)
+  let aoConfirmar = null;
+  function abrirModal({ titulo, icone, resumo, itens, aviso, destino: dest, botao, ok }) {
+    $('#modal-titulo').textContent = titulo; $('#modal-icone').textContent = icone;
+    $('#modal-resumo').innerHTML = resumo;
+    $('#modal-lista').innerHTML = itens.map(i => `<li>📄 ${esc(i.nome)} <span style="color:#777">(${fmt(i.tam)})</span></li>`).join('');
+    $('#modal-aviso').textContent = aviso || '';
+    $('#modal-destino').textContent = dest; $('#modal-ok').textContent = botao;
+    aoConfirmar = ok;
+    $('#modal').classList.add('on'); $('#modal-ok').focus();
+  }
+  function fecharModal() { $('#modal').classList.remove('on'); aoConfirmar = null; $('#lista-origem').focus(); }
+  $('#modal-cancelar').addEventListener('click', fecharModal);
+  $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') fecharModal(); });
+  $('#modal-ok').addEventListener('click', () => { const f = aoConfirmar; fecharModal(); f && f(); });
+
+  function confirmarParaAzure(itens) {
+    const total = itens.reduce((s, a) => s + Number(a.size || 0), 0);
+    const noAzure = nomesDestino();
+    const existentes = itens.filter(a => noAzure.has(a.name)).length;
+    abrirModal({
+      titulo: 'Confirmar transferência', icone: '⇨', botao: 'Transferir',
+      resumo: `Transferir <b>${itens.length}</b> arquivo(s) (${fmt(total)}) do Google Drive para o Azure?`,
+      itens: itens.map(a => ({ nome: a.name, tam: a.size })),
+      aviso: existentes ? `⚠ ${existentes} arquivo(s) já existe(m) no destino e será(ão) sobrescrito(s).` : '',
+      destino: `azure://${CONTAINER}/`,
+      ok: () => enfileirar(itens.map(a => ({
+        nome: a.name, tam: a.size, direcao: 'Drive → Azure', destino: `azure://${CONTAINER}/${a.name}`,
+        executar: () => postJSON(URL.transferir, { id: a.id }),
+        aoConcluir: () => {}, final: recarregarDestino,
+      }))),
+    });
+  }
+  function confirmarParaDrive(arquivos) {
+    if (!UPLOAD_OK) return;
+    const total = arquivos.reduce((s, f) => s + f.size, 0);
+    const nomes = new Set(origem.map(a => a.name));
+    const repetidos = arquivos.filter(f => nomes.has(f.name)).length;
+    abrirModal({
+      titulo: 'Enviar para o Google Drive', icone: '⇧', botao: 'Enviar',
+      resumo: `Enviar <b>${arquivos.length}</b> arquivo(s) (${fmt(total)}) do seu computador para o Google Drive?`,
+      itens: arquivos.map(f => ({ nome: f.name, tam: f.size })),
+      aviso: repetidos ? `⚠ ${repetidos} arquivo(s) já tem(têm) o mesmo nome na pasta. O Drive manterá os dois.` : '',
+      destino: `drive:/…/${PASTA_NOME}/`,
+      ok: () => enfileirar(arquivos.map(f => ({
+        nome: f.name, tam: f.size, direcao: 'PC → Drive', destino: `drive:/…/${PASTA_NOME}/${f.name}`,
+        executar: progresso => enviarArquivo(f, progresso),
+        aoConcluir: r => novos.add(r.arquivo || f.name), final: recarregarOrigem,
+      }))),
+    });
+  }
+
+  // ---------- requisições
+  async function postJSON(url, corpo) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+      return await r.json();
+    } catch (e) { return { status: 'erro', detalhe: 'Falha de rede: ' + e.message }; }
+  }
+  function enviarArquivo(arquivo, progresso) {   // XHR para ter o progresso real do envio
+    return new Promise(resolve => {
+      const fd = new FormData(); fd.append('pasta', PASTA); fd.append('arquivo', arquivo);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', URL.upload);
+      xhr.upload.onprogress = e => e.lengthComputable && progresso(e.loaded / e.total);
+      xhr.upload.onload = () => progresso(null);   // navegador terminou; agora o servidor envia ao Drive
+      xhr.onload = () => { try { resolve(JSON.parse(xhr.responseText)); } catch (_) { resolve({ status: 'erro', detalhe: `HTTP ${xhr.status}` }); } };
+      xhr.onerror = () => resolve({ status: 'erro', detalhe: 'Falha de rede' });
+      xhr.send(fd);
+    });
+  }
+
+  // ---------- fila de transferência (várias ao mesmo tempo, status em tempo real)
+  const fila = [];
+  let ativos = 0;
+  const finais = new Set();
+  function enfileirar(tarefas) {
+    for (const t of tarefas) {
+      t.tr = document.createElement('tr');
+      t.tr.innerHTML = `<td title="${esc(t.nome)}">📄 ${esc(t.nome)}</td><td class="dir">${t.direcao}</td>
+        <td title="${esc(t.destino)}">${esc(t.destino)}</td><td class="col-tam">${fmt(t.tam)}</td>
+        <td><div class="barra"><i></i></div></td><td class="st fila-espera">Na fila</td>`;
+      $('#corpo-fila').appendChild(t.tr);
+      fila.push(t);
+    }
+    $('#corpo-fila').lastElementChild?.scrollIntoView({ block: 'nearest' });
+    proximo();
+  }
+  function proximo() {
+    while (ativos < PARALELO && fila.length) executar(fila.shift());
+    atualizarStatusFila();
+  }
+  async function executar(t) {
+    ativos++;
+    const st = t.tr.querySelector('.st'), barra = t.tr.querySelector('.barra'), i = barra.querySelector('i');
+    st.className = 'st andamento'; st.textContent = 'Transferindo…'; barra.classList.add('ind');
+    atualizarStatusFila();
+    const r = await t.executar(p => {
+      if (p === null) { barra.classList.add('ind'); i.style.width = ''; st.textContent = 'Enviando ao Drive…'; }
+      else { barra.classList.remove('ind'); i.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `Carregando ${(p * 100).toFixed(0)}%`; }
+    });
+    barra.classList.remove('ind');
+    if (r.status === 'sucesso') {
+      i.style.width = '100%'; st.className = 'st sucesso'; st.textContent = '✔ Concluído'; t.tr.dataset.fim = '1';
+      t.aoConcluir(r);
+    } else {
+      barra.classList.add('err'); st.className = 'st erro';
+      st.textContent = '✖ Erro: ' + (r.detalhe || 'desconhecido'); st.title = r.detalhe || '';
+    }
+    finais.add(t.final);
+    ativos--;
+    proximo();
+    if (!ativos && !fila.length) { const fs = [...finais]; finais.clear(); for (const f of fs) await f(); desenharOrigem(); }
+  }
+  function atualizarStatusFila() {
+    const linhas = [...document.querySelectorAll('#corpo-fila tr')];
+    const ok = linhas.filter(t => t.querySelector('.st.sucesso')).length;
+    const err = linhas.filter(t => t.querySelector('.st.erro')).length;
+    $('#status-fila').textContent = linhas.length
+      ? `Fila: ${fila.length} aguardando · ${ativos} em andamento · ${ok} concluído(s) · ${err} com erro` : '';
+    $('#status-geral').textContent = ativos ? 'Transferindo…' : 'Pronto.';
+  }
+  $('#bt-limpar-fila').addEventListener('click', () => {
+    document.querySelectorAll('#corpo-fila tr[data-fim="1"]').forEach(t => t.remove()); atualizarStatusFila();
+  });
+  window.addEventListener('beforeunload', e => { if (ativos || fila.length) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ---------- painel do Azure
+  function desenharDestino() {
+    $('#corpo-destino').innerHTML = destino.map(b => `<tr><td title="${esc(b.name)}"><span class="ico">📄</span>${esc(b.name)}</td>
+      <td class="col-tam">${fmt(b.size)}</td><td class="col-tipo">${tipo(b.name)}</td><td class="col-data">${data(b.modified)}</td></tr>`).join('');
+    $('#destino-vazio').hidden = destino.length > 0;
+    const total = destino.reduce((s, b) => s + Number(b.size || 0), 0);
+    $('#rodape-destino').textContent = `${destino.length} blob(s). Tamanho total: ${fmt(total)}`;
+  }
+  async function recarregarDestino() {
+    try { const r = await fetch(URL.destino); if (r.ok) { destino = await r.json(); desenharDestino(); } } catch (_) {}
+  }
+
+  desenharDestino();
+  desenharOrigem();
+  $('#lista-origem').focus();
+})();
+</script>
+{% endblock %}
